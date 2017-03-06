@@ -1,10 +1,27 @@
+from math import log
+from math import pow
+from math import exp
+from random import random
+import queue
+
+# global variables
+num_hosts = 0 # number of hosts
+MAX_BUFFER = float("inf")
+mu = 1 # arrival rate
+lamda = 0.1 # service rate 
+
+# for keeping track of stats
+global_time = 0.0
+tota_bytes = 0
+total_delay = 0
+
 #
 # Event Class
 #
 class Event:
   def __init__(self, event_time = 1, event_type = 'N', _next = None, _prev = None):
     self.event_time = event_time
-    self.event_type = event_type
+    self.event_type = event_type # A for arrival, D for departure, C for channel-sensing, T for timeout event
     self._next = _next
     self._prev = _prev
 
@@ -78,5 +95,71 @@ class EventList:
     while curr != self.tail:
       print(curr.get_event_time())
       curr = curr._next
-      
 
+#
+# Host Class
+#
+class Host:
+  def __init__(self, length, packets_dropped, backoff_n, backoff_counter, transmission_time, queueing_time):
+    self.buffer = queue.Queue()
+    self.buffer_length = length
+    self.packets_dropped = packets_dropped
+    self.backoff_n = backoff_n
+    self.backoff_counter = backoff_counter
+    self.transmission_time = transmission_time
+    self.queueing_time = queueing_time
+
+  def get_buffer_length(self):
+    return self.buffer_length
+
+  def set_buffer_length(self, length):
+    self.buffer_length = length
+
+  def get_packets_dropped(self):
+    return packets_dropped
+
+  def set_packets_dropped(self, dropped):
+    self.packets_dropped = dropped
+
+  def get_backoff_n(self):
+    return backoff_n
+
+  def set_backoff_n(self, n):
+    self.backoff_n = n
+
+  def get_backoff_counter(self):
+    return backoff_counter
+
+  def set_backoff_counter(self, count):
+    self.backoff_counter = count
+
+  def get_transmission_time(self):
+    return self.transmission_time
+
+  def set_transmission_time(self, time):
+    self.transmission_time = time
+
+  def get_queueing_time(self):
+    return self.queueing_time
+
+  def set_queueing_time(self, time):
+    self.queueing_time = time
+
+# generate random timr from negative exponential distribuiton
+def neg_exp_dist_time(rate):
+  u = random()
+  return ((-1 / rate) * log(1- u))
+
+def main():
+  global num_hosts
+  global MAX_BUFFER
+  global mu
+  global lamda
+  global global_time
+  global total_bytes
+  global total_delay
+
+  return
+
+if __name__ == '__main__':
+  main()
