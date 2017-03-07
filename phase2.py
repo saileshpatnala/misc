@@ -5,48 +5,40 @@ from random import random
 import queue
 
 # global variables
-num_hosts = 0 # number of hosts
-MAX_BUFFER = float("inf")
+num_hosts = 10 # number of hosts
+num_packets = 100000 # number of packets
+MAX_BUFFER = float("inf") # maximum queue size
 mu = 1 # arrival rate
 lamda = 0.1 # service rate 
 
 # for keeping track of stats
-global_time = 0.0
-tota_bytes = 0
-total_delay = 0
+global_time = 0.0 # current time
+previous_time = 0.0 # previous event time
+tota_bytes = 0 # number of bytes successfully transmitted
+total_delay = 0 # total delay for all hosts
+channel_busy = False # transmission channel in use 
 
 #
 # Event Class
 #
 class Event:
-  def __init__(self, event_time = 1, event_type = 'N', _next = None, _prev = None):
+  def __init__(self, event_time = -1, event_type = 'N', sub_type = -1, src = 0, dest = 0, size = 0, _next = None, _prev = None):
     self.event_time = event_time
     self.event_type = event_type # A for arrival, D for departure, C for channel-sensing, T for timeout event
-    self._next = _next
-    self._prev = _prev
-
-  def get_event_type(self):
-    return event_type
-
-  def set_event_type(self, _type):
-    self.event_type = _type
-
-  def get_event_time(self):
-    return event_time
-
-  def set_event_time(self, time):
-    self.event_time = time
-
+    self.event_sub_type = sub_type # 0 for handshake, 1, data packet, 2 for ack
+    self.source = src
+    self.destination = dest
+    self.size = size
+    self._next = _next # for double linked_list implementation
+    self._prev = _prev # for double linked list implementation
 
 #
 # Packet Class
 #
 class Packet:
-  def __init__(self, service_time = 0.0):
+  def __init__(self, service_time = 0.0, size = 0.0):
     self.service_time = service_time
-
-  def get_service_time(self):
-    return self.service_time
+    self.size = size
 
 #
 # EventList Class
@@ -100,7 +92,7 @@ class EventList:
 # Host Class
 #
 class Host:
-  def __init__(self, length, packets_dropped, backoff_n, backoff_counter, transmission_time, queueing_time):
+  def __init__(self, length, packets_dropped = 0, backoff_n = 0, backoff_counter = 0, transmission_time = 0.0, queueing_time = 0.0):
     self.buffer = queue.Queue()
     self.buffer_length = length
     self.packets_dropped = packets_dropped
@@ -109,55 +101,87 @@ class Host:
     self.transmission_time = transmission_time
     self.queueing_time = queueing_time
 
-  def get_buffer_length(self):
-    return self.buffer_length
-
-  def set_buffer_length(self, length):
-    self.buffer_length = length
-
-  def get_packets_dropped(self):
-    return packets_dropped
-
-  def set_packets_dropped(self, dropped):
-    self.packets_dropped = dropped
-
-  def get_backoff_n(self):
-    return backoff_n
-
-  def set_backoff_n(self, n):
-    self.backoff_n = n
-
-  def get_backoff_counter(self):
-    return backoff_counter
-
-  def set_backoff_counter(self, count):
-    self.backoff_counter = count
-
-  def get_transmission_time(self):
-    return self.transmission_time
-
-  def set_transmission_time(self, time):
-    self.transmission_time = time
-
-  def get_queueing_time(self):
-    return self.queueing_time
-
-  def set_queueing_time(self, time):
-    self.queueing_time = time
-
-# generate random timr from negative exponential distribuiton
+# generate random time from negative exponential distribuiton
 def neg_exp_dist_time(rate):
   u = random()
   return ((-1 / rate) * log(1- u))
 
+# process handshake arrival event
+def process_handshake_arrival_event(gel, channel):
+  return
+
+# process data packet arrival event
+def process_data_packet_arrival_event(gel, channel):
+  return
+
+# process ack packet arrival event
+def process_ack_packet_arrival_event(gel, channel):
+  return
+
+# process data packet departure event
+def process_data_packet_departure_event(gel, channel):
+  return
+
+# process ack packet departure event
+def process_ack_packet_departure_event(gel, channel):
+  return
+
 def main():
   global num_hosts
+  global num_packets
   global MAX_BUFFER
   global mu
   global lamda
   global global_time
+  global previous_time
   global total_bytes
   global total_delay
+  global channel_busy
+
+  # initialization
+  gel = EventList()
+  channel = EventList()
+
+  hosts = [Host() for i in range(0, num_hosts)]
+  for i in range(0, num_hosts):
+    temp = Event() # handshake arrival event
+    temp.event_time = 0
+    temp.event_type = 'A'
+    temp.event_sub_type = 0 
+    temp.source = i
+    gel.insert(temp)
+
+  Event head = gel.get_head()
+  previous_time = head.event_time
+
+  # iteration
+  for i in range(0, num_packets):
+    curr_event = gel.get_head()
+    global_time = curr_event.event_time
+
+    # process arrival events
+    if curr_event.event_type == 'A':
+      # process handshake arrival event
+      if curr_event.event_sub_type == 0:
+        process_handshake_arrival_event(gel, channel)
+
+      # process data packet arrival event
+      elif curr_event.event_sub_type == 1:
+        process_data_packet_arrival_event(gel, channel)
+
+      # process ack packet arrival event
+      elif curr_event.event_sub_type == 2:
+        process_ack_packet_arrival_event(gel, channel)
+
+    # process departure events
+    elif curr_event.event_type == 'D':
+      # process data packet departure event
+      if curr_event.event_sub_type == 1:
+        process_data_packet_departure_event(gel, channel)
+
+      # process ack packet departure event
+      elif curr_event.event_sub_type == 2:
+        process_ack_packet_departure_event(gel, channel)
 
   return
 
