@@ -1,35 +1,49 @@
 # pseudo code for processing packet
 
-if arrival event:
-  if handshake arrival event:
-    process handshake arrival event
+for i in range(0, num_packets):
+  if arrival event:
+    if handshake arrival event:
+      process handshake arrival event
 
-  else if data packet arrival event:
-    process data packet arrival event
+    else if data packet arrival event:
+      process data packet arrival event
 
-  else if ack packet arrival event
-    process ack packet arrival event
+    else if ack packet arrival event
+      process ack packet arrival event
 
-else if departure event:
-  if data packet event:
-    process data packet departure
+  else if departure event:
+    if data packet event:
+      process data packet departure
 
-  else if ack packet event:
-    process ack packet departure
+    else if ack packet event:
+      process ack packet departure
 
-else if channel-sensing event:
-  if channel is free:
+  else if channel-sensing event:
+    process channel sensing event
 
-  else if channel is not free:
+  else if timeout event:
+    process timeout event
 
-else if timeout event:
-  
-
-else:
-  throw error
+  else:
+    throw error
 
 gel.pop()
 previous_time = global_time
 
 
+arrival event: 
+time = global_time + neg_exp_dist_time(lamda)
 
+departure event: 
+time = global_time + neg_exp_dist_time(mu)
+
+channel-sensing event:
+time = global_time + 0.01
+
+timeout event:
+time = global_time
+
+ack departure event: 
+time = global_time + SIFS
+
+arrival event for data packet to new host
