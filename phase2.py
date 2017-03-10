@@ -2,6 +2,7 @@ from math import log
 from math import pow
 from math import exp
 from random import random
+from random import uniform
 
 # global variables
 num_hosts = 10 # number of hosts
@@ -152,7 +153,15 @@ def neg_exp_dist_time(rate):
 
 # set initial backoff conuter values for hosts
 # all hosts must have different values
-def initializa_backoff_counter():
+def initialize_backoff_counter(hosts):
+  selected_backoff_counter = []
+  i = 0
+  while i < num_hosts:
+    u = uniform(0, t_value)
+    if u not in selected_backoff_counter:
+      selected_backoff_counter.append(u)
+      hosts[i].backoff_counter = u
+      i += 1
   return
 
 # reset backoff counter for host when there is a timeout
