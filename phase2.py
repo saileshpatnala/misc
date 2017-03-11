@@ -1,7 +1,6 @@
 from math import log, pow, exp
 from random import random, uniform, expovariate
 
-
 # global variables
 num_hosts = 10 # number of hosts
 num_packets = 100000 # number of packets
