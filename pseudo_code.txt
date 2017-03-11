@@ -1,5 +1,6 @@
 # pseudo code for processing packet
 
+""" Main Function Code """
 for i in range(0, num_packets):
   if arrival event:
     if handshake arrival event:
@@ -30,7 +31,7 @@ for i in range(0, num_packets):
 gel.pop()
 previous_time = global_time
 
-
+""" Event Times for Different Sub Types"""
 arrival event: 
 time = global_time + neg_exp_dist_time(lamda)
 
@@ -46,23 +47,17 @@ time = global_time
 ack departure event: 
 time = global_time + SIFS
 
-arrival event for data packet to new host
-
-
-NOTES:
+""" NOTES """
 -> set backoff_counter between [0, T] initially
 -> every time there is a timeout rest backoff_counter between [0, n*T]
 -> backoff_counter values need to be different for all hosts
   -> if they're the same there will be a collision
 
 
+""" QUESTIONS """
+-> should we decrement the backoff_counter by 1 if the channel is free during the channel sensing event
 
-QUESTIONS:
--> we have to assign unique backoff counter between [0, T], and for no collision T needs to be greater than num_hosts. how do we assign the values if T is less than num_hosts
-
--> the channel can only hold one event right? there is a collision if a host tries to insert an event into the gel
-
--> what should we set the time to when we create a channel sensing event
+-> 
 
 
 

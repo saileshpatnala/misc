@@ -1,7 +1,6 @@
-from math import log
-from math import pow
-from math import exp
-from random import random
+from math import log, pow, exp
+from random import random, uniform, expovariate
+
 
 # global variables
 num_hosts = 10 # number of hosts
@@ -38,7 +37,7 @@ class Buffer:
     return len(self.data)
 
   def front(self):
-    return data[0]
+    return self.data[0]
 
 #
 # Event Class
@@ -49,8 +48,8 @@ class Event:
     self.type = event_type
     # A for arrival, D for departure, C for channel-sensing, T for timeout 
     self.sub_type = event_sub_type 
-    # for arrival events: 0 for handshake, 1 for data packet, 2 for ack packet
-    # for departure events: 0 for data packet, 1 for ack packet
+    # for arrival events: 0 for genesis, 1 for data packet, 2 for ack packet
+    # for departure events: 0 for genesis, 1 for ack packet
     self.source = src
     self.destination = dest
     self.size = size
@@ -152,29 +151,61 @@ def neg_exp_dist_time(rate):
 
 # set initial backoff conuter values for hosts
 # all hosts must have different values
-def initializa_backoff_counter():
+def initialize_backoff_counter(hosts):
+  global num_hosts
+
+  selected_backoff_value = []
+  i = 0
+  while i < num_hosts:
+    u = uniform(0, t_value)
+    if u not in selected_backoff_value:
+      selected_backoff_value.append(u)
+      hosts[i].backoff_counter = u
+      i += 1
   return
 
 # reset backoff counter for host when there is a timeout
 # all hosts much have different values
-def reset_backoff_counter():
+def reset_backoff_counter(hosts):
   return
 
+def generate_packet_size():
+  u = expovariate(0.001)
+  while u > 1544:
+    u = expovariate(0.001)
 
-# process handshake arrival event
-def process_handshake_arrival_event(curr_event, hosts, gel, channel):
+  return u
+
+
+# process arrival event
+def process_arrival_event(curr_event, hosts, gel, channel):
+  global num_hosts
+  global num_packets
+  global MAX_BUFFER
+  global mu
+  global lamda
+  global DIFS
+  global SIFS
+  global channel_busy
+  global t_value
+  global delta_t
+  global global_time
+  global previous_time
+  global total_bytes
+  global total_delay
+
   # create next arrival event
   next_arrival_event = Event()
   next_arrival_event.type = 'A'
+  next_arrival_event.sub_type = 0
   next_arrival_event.source = curr_event.source
   next_arrival_event.time = global_time + neg_exp_dist_time(lamda)
-  next_arrival_event.sub_type = 0 # handshake arrival event
-
+  
   # insert next arrival event into gel
   gel.insert(next_arrival_event)
 
   new_packet = Packet()
-  # FIXME: assign size for new_packet
+  new_packet.size = generate_packet_size()
   new_packet.service_time = neg_exp_dist_time(mu)
 
   # currently transmitting host
@@ -189,9 +220,9 @@ def process_handshake_arrival_event(curr_event, hosts, gel, channel):
     # create departure event
     departure_event = Event()
     departure_event.type = 'D'
+    departure_event.sub_type = 0
     departure_event.source = curr_event.source
     departure_event.time = global_time + new_packet.service_time
-    departure_event.sub_type = 0
     departure_event.destination = curr_event.destination
 
     # insert departure event into gel
@@ -210,6 +241,21 @@ def process_handshake_arrival_event(curr_event, hosts, gel, channel):
 
 # process data packet arrival event
 def process_data_packet_arrival_event(curr_event, hosts, gel, channel):
+  global num_hosts
+  global num_packets
+  global MAX_BUFFER
+  global mu
+  global lamda
+  global DIFS
+  global SIFS
+  global channel_busy
+  global t_value
+  global delta_t
+  global global_time
+  global previous_time
+  global total_bytes
+  global total_delay
+
   # currently transmitting host
   curr_host = hosts[curr_event.source]
 
@@ -224,7 +270,10 @@ def process_data_packet_arrival_event(curr_event, hosts, gel, channel):
     ack_departure_event.size = curr_event.size
     ack_departure_event.time = global_time + SIFS
 
-  elif e.is_corrupt == True:
+    # insert ack departure event into gel
+    gel.insert(ack_departure_event)
+
+  #elif e.is_corrupt == True:
     # do nothing
 
   else:
@@ -237,6 +286,21 @@ def process_data_packet_arrival_event(curr_event, hosts, gel, channel):
 
 # process ack packet arrival event
 def process_ack_packet_arrival_event(curr_event, hosts, gel, channel):
+  global num_hosts
+  global num_packets
+  global MAX_BUFFER
+  global mu
+  global lamda
+  global DIFS
+  global SIFS
+  global channel_busy
+  global t_value
+  global delta_t
+  global global_time
+  global previous_time
+  global total_bytes
+  global total_delay
+
   # currently transmitting host
   curr_host = hosts[curr_event.source]
   
@@ -253,7 +317,6 @@ def process_ack_packet_arrival_event(curr_event, hosts, gel, channel):
     next_departure_event.type = 'D'
     next_departure_event.source = curr_event.source
     next_departure_event.sub_type = 0
-    # need to implement queue peek instead of get
     new_packet = curr_host.buffer.front()
     next_departure_event.time = global_time + new_packet.service_time
     next_departure_event.destination = curr_event.destination
@@ -262,9 +325,9 @@ def process_ack_packet_arrival_event(curr_event, hosts, gel, channel):
     gel.insert(next_departure_event)
 
     # set backoff_n
-    curr_host.backoff_n = 1
+    #curr_host.backoff_n = 1
 
-  elif channel.size > 1:
+  #elif channel.size > 1:
     # do nothing 
 
   else:
@@ -276,7 +339,22 @@ def process_ack_packet_arrival_event(curr_event, hosts, gel, channel):
   return
 
 # process data packet departure event
-def process_data_packet_departure_event(curr_event, hosts, gel, channel):
+def process_departure_event(curr_event, hosts, gel, channel):
+  global num_hosts
+  global num_packets
+  global MAX_BUFFER
+  global mu
+  global lamda
+  global DIFS
+  global SIFS
+  global channel_busy
+  global t_value
+  global delta_t
+  global global_time
+  global previous_time
+  global total_bytes
+  global total_delay
+
   #currently transmitting host
   curr_host = hosts[curr_event.source]
 
@@ -284,8 +362,9 @@ def process_data_packet_departure_event(curr_event, hosts, gel, channel):
   curr_host.queueing_time += new_packet.service_time
 
   if curr_host.buffer_length > 0:
+    # if channel is free
     if channel.size == 0:
-      # create arrival event
+      # create arrival event for new host
       new_arrival_event = Event()
       new_arrival_event.type = 'A'
       new_arrival_event.source = curr_event.destination
@@ -307,8 +386,10 @@ def process_data_packet_departure_event(curr_event, hosts, gel, channel):
       # insert timeout event into gel
       gel.insert(new_timeout_event)
 
+    # if channel is not free
     elif channel.size > 0:
       # FIXME: choose random backoff value
+      # reset backoff values for each host
 
       # create channel sensing event
       new_channel_sensing_event = Event()
@@ -326,28 +407,59 @@ def process_data_packet_departure_event(curr_event, hosts, gel, channel):
 
 # process ack packet departure event
 def process_ack_packet_departure_event(curr_event, hosts, gel, channel):
+  global num_hosts
+  global num_packets
+  global MAX_BUFFER
+  global mu
+  global lamda
+  global DIFS
+  global SIFS
+  global channel_busy
+  global t_value
+  global delta_t
+  global global_time
+  global previous_time
+  global total_bytes
+  global total_delay
+
   # currently transmitting host
   curr_host = hosts[curr_event.source]
 
   if channel.size == 0:
-    # create new arrival event
-    new_arrival_event = Event()
-    new_arrival_event.type = 'A'
-    new_arrival_event.source = curr_event.destination
-    new_arrival_event.size = curr_event.size
-    new_arrival_event.destination = new_arrival_event.source
-    new_arrival_event.time = global_time + (64 / (11000000/8))
+    # create new ack packet arrival event
+    new_ack_packet_arrival_event = Event()
+    new_ack_packet_arrival_event.type = 'A'
+    new_ack_packet_arrival_event.sub_type = 2
+    new_ack_packet_arrival_event.source = curr_event.destination
+    new_ack_packet_arrival_event.size = curr_event.size
+    new_ack_packet_arrival_event.destination = new_arrival_event.source
+    new_ack_packet_arrival_event.time = global_time + (64 / (11000000/8))
 
     # insert new arrival event into gel 
     gel.insert(new_arrival_event)
 
-  elif channel.size > 0:
+  #elif channel.size > 0:
     # FIXME: make all events in channel corrupt
 
   return
 
 # process channel sensing event
 def process_channel_sensing_event(curr_event, hosts, gel, channel):
+  global num_hosts
+  global num_packets
+  global MAX_BUFFER
+  global mu
+  global lamda
+  global DIFS
+  global SIFS
+  global channel_busy
+  global t_value
+  global delta_t
+  global global_time
+  global previous_time
+  global total_bytes
+  global total_delay
+
   curr_host = hosts[curr_event.source]
   # if channel is free
   if channel.size == 0:
@@ -367,26 +479,16 @@ def process_channel_sensing_event(curr_event, hosts, gel, channel):
       # insert new data packet arrival event into gel
       gel.insert(new_arrival_event)
 
-      if channel.size > 0:
-        channel.insert(new_arrival_event)
-        for i in range(0, channel.size):
-          e = channel.at(i)
-          e.is_corrupt = True
+    else:
+      print('ERROR: data corruption check')
 
-      elif channel.size == 0:
-        new_arrival_event.corrupt = 0
-        channel.insert(new_arrival_event)
+    new_timeout_event = Event()
+    new_timeout_event.type = 'T'
+    new_timeout_event.source = curr_event.source
+    new_timeout_event.time = global_time + SIFS + (new_packet.size / (11000000/8)) + (64 / (11000000/8)) + delta_t
 
-      else:
-        print('ERROR: data corruption check')
-
-      new_timeout_event = Event()
-      new_timeout_event.type = 'T'
-      new_timeout_event.source = curr_event.source
-      new_timeout_event.time = global_time + SIFS + (new_packet.size / (11000000/8)) + (64 / (11000000/8)) + delta_t
-
-      # insert new timeout event into gel
-      gel.insert(new_timeout_event)
+    # insert new timeout event into gel
+    gel.insert(new_timeout_event)
 
   elif channel.size > 0:
     # create new channel sensing event
@@ -405,6 +507,21 @@ def process_channel_sensing_event(curr_event, hosts, gel, channel):
 
 # process timeout event
 def process_timeout_event(curr_event, hosts, gel, channel):
+  global num_hosts
+  global num_packets
+  global MAX_BUFFER
+  global mu
+  global lamda
+  global DIFS
+  global SIFS
+  global channel_busy
+  global t_value
+  global delta_t
+  global global_time
+  global previous_time
+  global total_bytes
+  global total_delay
+
   curr_host = hosts[curr_event.source]
 
   curr_hosts.backoff_n += 1
@@ -416,6 +533,7 @@ def process_timeout_event(curr_event, hosts, gel, channel):
   new_departure_event.source = curr_event.source
   new_departure_event.time = global_time + new_packet.service_time
   new_departure_event.destination = curr_event.destination
+  new_departure_event.sub_type = 0
 
   # insert departure event into gel
   gel.insert(new_departure_event)
@@ -423,11 +541,29 @@ def process_timeout_event(curr_event, hosts, gel, channel):
   return
 
 def output_statistics(hosts):
+  global num_hosts
+  global num_packets
+  global MAX_BUFFER
+  global mu
+  global lamda
+  global DIFS
+  global SIFS
+  global channel_busy
+  global t_value
+  global delta_t
+  global global_time
+  global previous_time
+  global total_bytes
+  global total_delay
+
   for i in range(0, num_hosts):
     total_delay += hosts[i].transmission_time + hosts[i].queueing_time
 
-  print('Throughput: ', total_bytes / global_time)
-  print('Average Network Delay: ', total_delay / (total_bytes / global_time))
+  throughput = total_bytes / global_time
+  avg_network_delay = total_delay / throughput
+
+  print('Throughput: ', throughput)
+  print('Average Network Delay: ', avg_network_delay)
   return
 
 
@@ -453,7 +589,10 @@ def main():
 
   hosts = [Host() for i in range(0, num_hosts)]
   for i in range(0, num_hosts):
-    e = new_event('A', i, global_time) #new_event(type, source, time)
+    e = Event()
+    e.type = 'A'
+    e.source = i
+    e.time = global_time + neg_exp_dist_time(lamda)
     e.sub_type = 0 
     gel.insert(e)
 
@@ -467,9 +606,9 @@ def main():
 
     # process arrival events
     if curr_event.type == 'A':
-      # process handshake arrival event
+      # process genesis arrival event
       if curr_event.sub_type == 0:
-        process_handshake_arrival_event(curr_event, hosts, gel, channel)
+        process_arrival_event(curr_event, hosts, gel, channel)
 
       # process data packet arrival event
       elif curr_event.sub_type == 1:
@@ -483,7 +622,7 @@ def main():
     elif curr_event.type == 'D':
       # process data packet departure event
       if curr_event.sub_type == 0:
-        process_data_packet_departure_event(curr_event, hosts, gel, channel)
+        process_departure_event(curr_event, hosts, gel, channel)
 
       # process ack packet departure event
       elif curr_event.sub_type == 1:
@@ -504,7 +643,7 @@ def main():
     gel.remove_head()
     previous_time = global_time
 
-    output_statistics(hosts)
+  output_statistics(hosts)
 
   return
 
