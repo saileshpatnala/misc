@@ -1,9 +1,13 @@
+# FIXME: 0 throughout and 0 delay
+# FIXME: occasional runtime error - list index out of range
+# FIXME: need implement reset_backoff_counter
+
 from math import log, pow, exp
-from random import random, uniform, expovariate
+from random import random, uniform, expovariate, randint
 
 # global variables
 num_hosts = 10 # number of hosts
-num_packets = 100000 # number of packets
+num_packets = 100 # number of packets
 MAX_BUFFER = float("inf") # maximum queue size
 mu = 1 # service rate
 lamda = 0.1 # arrival rate 
@@ -16,7 +20,7 @@ delta_t = 15 # timeout value (msec)
 # for keeping track of stats
 global_time = 0.0 # current time
 previous_time = 0.0 # previous event time
-tota_bytes = 0 # number of bytes successfully transmitted
+total_bytes = 0 # number of bytes successfully transmitted
 total_delay = 0 # total delay for all hosts
 
 #
@@ -55,7 +59,33 @@ class Event:
     self.is_corrupt = corrupt
     self._next = _next # for double linked_list implementation
     self._prev = _prev # for double linked list implementation
-    
+
+def new_event(_type, src, time):
+  e = Event()
+  e.type = _type
+  e.source = src
+  # set random destination
+  e.destination = randint(0, num_hosts)
+  # make sure destination != source
+  while e.source == e.destination:
+    e.destination = randint(0, num_hosts)
+
+  if _type == 'A':
+    e.time = time + neg_exp_dist_time(lamda)
+
+  elif _type == 'D':
+    e.time = time + neg_exp_dist_time(mu)
+
+  elif _type == 'C':
+    e.time = time + 0.01
+
+  elif _type == 'T':
+    e.time = time
+
+  else:
+    print('ERROR: cannot create event')
+
+  return e
 
 #
 # Packet Class
@@ -166,6 +196,16 @@ def initialize_backoff_counter(hosts):
 # reset backoff counter for host when there is a timeout
 # all hosts much have different values
 def reset_backoff_counter(hosts):
+  global num_hosts
+
+  selected_backoff_value = []
+  i = 0
+  while i < num_hosts:
+    u = uniform(0, host[i].backoff_n * t_value)
+    if u not in selected_backoff_value:
+      selected_backoff_value.append(u)
+      hosts[i].backoff_counter = u
+      i += 1
   return
 
 def generate_packet_size():
@@ -174,6 +214,14 @@ def generate_packet_size():
     u = expovariate(0.001)
 
   return u
+
+def make_events_corrupt(list):
+  curr = list.head
+  while curr != list.tail:
+    curr.is_corrupt = True
+    curr = curr._next
+
+  return
 
 
 # process arrival event
@@ -194,11 +242,8 @@ def process_arrival_event(curr_event, hosts, gel, channel):
   global total_delay
 
   # create next arrival event
-  next_arrival_event = Event()
-  next_arrival_event.type = 'A'
+  next_arrival_event = new_event('A', curr_event.source, global_time)
   next_arrival_event.sub_type = 0
-  next_arrival_event.source = curr_event.source
-  next_arrival_event.time = global_time + neg_exp_dist_time(lamda)
   
   # insert next arrival event into gel
   gel.insert(next_arrival_event)
@@ -217,12 +262,9 @@ def process_arrival_event(curr_event, hosts, gel, channel):
     curr_host.buffer_length += 1
 
     # create departure event
-    departure_event = Event()
-    departure_event.type = 'D'
+    departure_event = new_event('D', curr_event.source, global_time)
     departure_event.sub_type = 0
-    departure_event.source = curr_event.source
     departure_event.time = global_time + new_packet.service_time
-    departure_event.destination = curr_event.destination
 
     # insert departure event into gel
     gel.insert(departure_event)
@@ -259,11 +301,9 @@ def process_data_packet_arrival_event(curr_event, hosts, gel, channel):
   curr_host = hosts[curr_event.source]
 
   e = channel.get_head()
-  if e.is_corrupt == False:
+  if e is not None and e.is_corrupt == False:
     # create ack departure event
-    ack_departure_event = Event()
-    ack_departure_event.type = 'D'
-    ack_departure_event.source = curr_event.source
+    ack_departure_event = new_event('D', curr_event.source, global_time)
     ack_departure_event.sub_type = 1
     ack_departure_event.destination = curr_event.destination
     ack_departure_event.size = curr_event.size
@@ -272,7 +312,7 @@ def process_data_packet_arrival_event(curr_event, hosts, gel, channel):
     # insert ack departure event into gel
     gel.insert(ack_departure_event)
 
-  #elif e.is_corrupt == True:
+  # elif e.is_corrupt == True:
     # do nothing
 
   else:
@@ -312,9 +352,7 @@ def process_ack_packet_arrival_event(curr_event, hosts, gel, channel):
     curr_host.buffer_length -= 1
 
     # create next departure event
-    next_departure_event = Event()
-    next_departure_event.type = 'D'
-    next_departure_event.source = curr_event.source
+    next_departure_event = new_event('D', curr_event.source, global_time)
     next_departure_event.sub_type = 0
     new_packet = curr_host.buffer.front()
     next_departure_event.time = global_time + new_packet.service_time
@@ -324,9 +362,9 @@ def process_ack_packet_arrival_event(curr_event, hosts, gel, channel):
     gel.insert(next_departure_event)
 
     # set backoff_n
-    #curr_host.backoff_n = 1
+    curr_host.backoff_n = 1
 
-  #elif channel.size > 1:
+  # elif channel.size > 1:
     # do nothing 
 
   else:
@@ -364,21 +402,26 @@ def process_departure_event(curr_event, hosts, gel, channel):
     # if channel is free
     if channel.size == 0:
       # create arrival event for new host
-      new_arrival_event = Event()
-      new_arrival_event.type = 'A'
-      new_arrival_event.source = curr_event.destination
+      new_arrival_event = new_event('A', curr_event.destination, global_time)
+      new_arrival_event.sub_type = 1
       new_arrival_event.destination = curr_event.source
       new_arrival_eventtime = global_time + (new_packet.size / (11000000/8)) + DIFS
       new_arrival_event.size = new_packet.size
-      new_arrival_event.sub_type = 1
 
       # insert new arrival event into gel
       gel.insert(new_arrival_event)
 
+      if channel.size > 0:
+        channel.insert(new_arrival_event)
+        # make all events corrupt
+        make_events_corrupt(channel)
+
+      elif channel.size == 0:
+        new_arrival_event.is_corrupt = True
+
+
       # create timeout event
-      new_timeout_event = Event()
-      new_timeout_event.type = 'T'
-      new_timeout_event.source = curr_event.source
+      new_timeout_event = new_event('T', curr_event.source, global_time)
       new_timeout_event.destination = curr_event.destination
       new_timeout_event.time = global_time + SIFS + (new_packet.size / (11000000/8)) + (64 / (11000000/8)) + delta_t
 
@@ -389,11 +432,10 @@ def process_departure_event(curr_event, hosts, gel, channel):
     elif channel.size > 0:
       # FIXME: choose random backoff value
       # reset backoff values for each host
+      reset_backoff_counter(hosts)
 
       # create channel sensing event
-      new_channel_sensing_event = Event()
-      new_channel_sensing_event.type = 'C'
-      new_channel_sensing_event.source = curr_event.source
+      new_channel_sensing_event = new_event('C', curr_event.source, global_time)
       new_channel_sensing_event.time = global_time + 0.01
       new_channel_sensing_event.destination = curr_event.destination
 
@@ -426,10 +468,8 @@ def process_ack_packet_departure_event(curr_event, hosts, gel, channel):
 
   if channel.size == 0:
     # create new ack packet arrival event
-    new_ack_packet_arrival_event = Event()
-    new_ack_packet_arrival_event.type = 'A'
+    new_ack_packet_arrival_event = new_event('A', curr_event.destination, global_time)
     new_ack_packet_arrival_event.sub_type = 2
-    new_ack_packet_arrival_event.source = curr_event.destination
     new_ack_packet_arrival_event.size = curr_event.size
     new_ack_packet_arrival_event.destination = new_arrival_event.source
     new_ack_packet_arrival_event.time = global_time + (64 / (11000000/8))
@@ -437,8 +477,8 @@ def process_ack_packet_departure_event(curr_event, hosts, gel, channel):
     # insert new arrival event into gel 
     gel.insert(new_arrival_event)
 
-  #elif channel.size > 0:
-    # FIXME: make all events in channel corrupt
+  elif channel.size > 0:
+      make_events_corrupt(channel)
 
   return
 
@@ -468,9 +508,7 @@ def process_channel_sensing_event(curr_event, hosts, gel, channel):
       global_time = curr_event.time
 
       # create data packet arrival event
-      new_arrival_event = Event()
-      new_arrival_event.type = 'A'
-      new_arrival_event.source = curr_event.destination
+      new_arrival_event = new_event('A', curr_event.destination, global_time)
       next_arrival_event.time = global_time + (new_packet.size / (11000000/8)) + DIFS
       new_arrival_event.size = new_packet.size
       new_arrival_event.sub_type = 1
@@ -478,12 +516,16 @@ def process_channel_sensing_event(curr_event, hosts, gel, channel):
       # insert new data packet arrival event into gel
       gel.insert(new_arrival_event)
 
-    else:
-      print('ERROR: data corruption check')
+      if (channel.size > 0):
+        channel.insert(new_arrival_event)
+        make_events_corrupt(channel)
+      elif channel.size == 0:
+        new_arrival_event.corrupt = False
+        channel.insert(new_arrival_event)
+      else:
+        print('ERROR: data corruption check')
 
-    new_timeout_event = Event()
-    new_timeout_event.type = 'T'
-    new_timeout_event.source = curr_event.source
+    new_timeout_event = new_event('T', curr_event.source, global_time)
     new_timeout_event.time = global_time + SIFS + (new_packet.size / (11000000/8)) + (64 / (11000000/8)) + delta_t
 
     # insert new timeout event into gel
@@ -491,9 +533,7 @@ def process_channel_sensing_event(curr_event, hosts, gel, channel):
 
   elif channel.size > 0:
     # create new channel sensing event
-    new_channel_sensing_event = Event()
-    new_channel_sensing_event.source = curr_event.source
-    new_channel_sensing_event.time = time + 0.01
+    new_channel_sensing_event = new_event('C', curr_event.source, global_time)
     new_channel_sensing_event.destination = curr_event.destination
 
     # insert new channel sensing event into gel
@@ -523,13 +563,11 @@ def process_timeout_event(curr_event, hosts, gel, channel):
 
   curr_host = hosts[curr_event.source]
 
-  curr_hosts.backoff_n += 1
+  curr_host.backoff_n += 1
   new_packet = curr_host.buffer.front()
 
   # create departure event
-  new_departure_event = Event()
-  new_departure_event.type = 'D'
-  new_departure_event.source = curr_event.source
+  new_departure_event = new_event('D', curr_event.source, global_time)
   new_departure_event.time = global_time + new_packet.service_time
   new_departure_event.destination = curr_event.destination
   new_departure_event.sub_type = 0
@@ -558,8 +596,11 @@ def output_statistics(hosts):
   for i in range(0, num_hosts):
     total_delay += hosts[i].transmission_time + hosts[i].queueing_time
 
-  throughput = total_bytes / global_time
-  avg_network_delay = total_delay / throughput
+  throughput = (total_bytes / global_time)
+  if throughput == 0:
+    avg_network_delay = 0
+  else:
+    avg_network_delay = (total_delay / throughput)
 
   print('Throughput: ', throughput)
   print('Average Network Delay: ', avg_network_delay)
@@ -588,10 +629,7 @@ def main():
 
   hosts = [Host() for i in range(0, num_hosts)]
   for i in range(0, num_hosts):
-    e = Event()
-    e.type = 'A'
-    e.source = i
-    e.time = global_time + neg_exp_dist_time(lamda)
+    e = new_event('A', i, global_time)
     e.sub_type = 0 
     gel.insert(e)
 
