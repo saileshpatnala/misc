@@ -12,8 +12,8 @@ from math import log, pow, exp
 from random import random, uniform, expovariate, randint
 
 # global variables
-num_hosts = 10 # number of hosts
-num_packets = 100 # number of packets
+num_hosts = 5 # number of hosts
+num_packets = 100000 # number of packets
 MAX_BUFFER = float("inf") # maximum queue size
 mu = 1 # service rate
 lamda = 0.1 # arrival rate 
@@ -51,7 +51,7 @@ class Buffer:
 # Event Class
 #
 class Event:
-  def __init__(self, event_time = -1, event_type = 'N', event_sub_type = -1, src = 0, dest = 0, size = 0, corrupt = False, _next = None, _prev = None):
+  def __init__(self, event_time = -1, event_type = 'N', src = 0, dest = 0, size = 0, corrupt = False, _next = None, _prev = None):
     self.time = event_time
     self.type = event_type
     # A for arrival, D for departure, K for ack, C for channel-sensing, T for timeout 
@@ -67,10 +67,10 @@ def new_event(_type, src, time):
   e.type = _type
   e.source = src
   # set random destination
-  e.destination = randint(0, num_hosts)
+  e.destination = randint(0, num_hosts-1)
   # make sure destination != source
   while e.source == e.destination:
-    e.destination = randint(0, num_hosts)
+    e.destination = randint(0, num_hosts-1)
 
   if _type == 'A':
     e.time = time + neg_exp_dist_time(lamda)
@@ -306,6 +306,7 @@ def process_ack_event(curr_event, hosts, gel):
   # destination host for ack
   dest_host = hosts[curr_event.destination]
 
+  # if channel is free
   if channel_busy == False:
     # if ack didn't timeout
     if dest_host.timeout < curr_event.time:
@@ -321,14 +322,23 @@ def process_ack_event(curr_event, hosts, gel):
 
     # if ack timeout
     else:
+      packet = dest_host.buffer.front()
       # increment backoff n value
       dest_host.backoff_n += 1
-      # retransmit the packet
-      # create new departure event
+      # retransmit the packet - create new departure event
       new_departure_event = new_event('D', curr_event.destination, global_time)
       new_departure_event.destination = curr_event.source
       new_departure_event.time = global_time + packet.service_time
-      
+
+    if channel_busy == True:
+      # reset backoff_counter
+      reset_backoff_counter(curr_host, hosts)
+
+      # create new_ack_event
+      new_ack_event = new_event('K', curr_event.source, global_time)
+      new_ack_event.destination = curr_event.destination
+      ack_event.time = global_time + ((packet.size * 8)/ 11000000) + DIFS # FIXME: confirm this time
+
   return
 
 def process_sensing_event(curr_event, hosts, gel):
@@ -357,7 +367,7 @@ def output_statistics(hosts):
   global total_delay
 
   for i in range(0, num_hosts):
-    total_delay += hosts[i].transmission_time + host[i].queueing_time
+    total_delay += hosts[i].transmission_time + hosts[i].queueing_time
 
   throughput = (total_bytes / global_time)
   if throughput == 0:
@@ -392,7 +402,6 @@ def main():
   hosts = [Host() for i in range(0, num_hosts)]
   for i in range(0, num_hosts):
     e = new_event('A', i, global_time)
-    e.sub_type = 0
     gel.insert(e)
   initialize_backoff_counter(hosts)
 
